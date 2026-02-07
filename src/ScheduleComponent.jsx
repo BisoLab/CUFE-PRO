@@ -7,7 +7,6 @@ const ScheduleComponent = ({ rawScheduleData, studentName }) => {
   const [tutorialColor, setTutorialColor] = useState('#5CE1E6');
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Ref for the wrapper element
   const tableRef = useRef(null);
 
   // 1. Helper: Calculate text color for contrast
@@ -30,61 +29,90 @@ const ScheduleComponent = ({ rawScheduleData, studentName }) => {
     return h;
   };
 
-  // 3. Parsing Logic
   const parseSchedule = (text) => {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    if (!text) return {};
+
+    const cleanText = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+
     const schedule = {};
-    let currentDay = '';
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
-    const courseRegex = /^(.+?),\s*(.+?)\s*:\s*(.+?)\s*At\s*\[(.+?)\](?:\((.+?)\))?(.+?)\s*From\s*(\d{1,2}:\d{2})\s*To\s*(\d{1,2}:\d{2})/;
-
-    lines.forEach(line => {
-      if (days.some(d => line.includes(d))) {
-        currentDay = days.find(d => line.includes(d));
-        schedule[currentDay] = [];
-      } else if (currentDay) {
-        const match = line.match(courseRegex);
-        if (match) {
-            const groupMatch = line.match(/-\s*(\d+)\s*-$/); 
-            const group = groupMatch ? groupMatch[1] : '?';
-            let finalLocation = match[4];
-            if (finalLocation === '0' && match[5]) finalLocation = match[5];
-            const rawType = match[3].trim(); 
-            const strictType = rawType.split(' ').pop(); 
-
-            schedule[currentDay].push({
-                code: match[1],
-                name: match[2], 
-                type: strictType,
-                location: finalLocation,
-                start: match[7],
-                end: match[8],
-                group: group,
-                start24: get24Hour(match[7], false),
-                end24: get24Hour(match[8], true)
-            });
-        }
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    let foundDays = [];
+    days.forEach(day => {
+      let index = cleanText.indexOf(day);
+      
+      if (index !== -1) {
+        foundDays.push({ day, index });
       }
     });
+
+    // Sort by position to process in order
+    foundDays.sort((a, b) => a.index - b.index);
+
+    // C. Process each day chunk
+    foundDays.forEach((item, i) => {
+      const currentDay = item.day;
+      
+      // Determine start and end of this day's content string
+      const startSlice = item.index + currentDay.length;
+      const endSlice = (i + 1 < foundDays.length) ? foundDays[i + 1].index : cleanText.length;
+      const dayContent = cleanText.substring(startSlice, endSlice);
+
+      schedule[currentDay] = [];
+
+      // D. Regex to find courses within the day chunk
+      // Explanation:
+      // 1. ([^,]+)       -> Code (stops at comma)
+      // 2. (.+?):        -> Name (lazy until colon)
+      // 3. (.+?) At      -> Type (lazy until 'At')
+      // 4. \[(.*?)\]     -> Location Code inside []
+      // 5. (?:\((.*?)\))? -> Optional Lab name inside ()
+      // 6. (.*?) From    -> Rest of Location string until 'From'
+      // 7. Time To Time  -> Times
+      // 8. - (\d+) -     -> Group number at the end
+      const courseRegex = /([A-Za-z0-9]+?),\s*(.+?)\s*:\s*(.+?)\s*At\s*\[(.*?)\](?:\((.*?)\))?(.*?)\s*From\s*(\d{1,2}:\d{2})\s*To\s*(\d{1,2}:\d{2})\s*-\s*(\d+)\s*-/g;
+
+      let match;
+      while ((match = courseRegex.exec(dayContent)) !== null) {
+        let finalLocation = match[4]; // The ID in brackets
+        
+        // Handle the specific logic where location might be in the parens or the text
+        if (finalLocation === '0' && match[5]) {
+            finalLocation = match[5]; // Use parens content (e.g. CCEC Lab2)
+        }
+        
+        const rawType = match[3].trim();
+        const strictType = rawType.split(' ').pop(); // e.g., "Lecture"
+
+        schedule[currentDay].push({
+          code: match[1].trim(),
+          name: match[2].trim(),
+          type: strictType,
+          location: finalLocation,
+          start: match[7],
+          end: match[8],
+          group: match[9],
+          start24: get24Hour(match[7], false),
+          end24: get24Hour(match[8], true)
+        });
+      }
+    });
+
     return schedule;
   };
 
   const scheduleData = parseSchedule(rawScheduleData);
   const displayHours = ["8:00 - 9:00", "9:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 1:00", "1:00 - 2:00", "2:00 - 3:00", "3:00 - 4:00", "4:00 - 5:00", "5:00 - 6:00", "6:00 - 7:00"];
 
-  // 4. Export Logic using html-to-image
- const handleDownloadImage = useCallback(async () => {
+  // 4. Export Logic
+  const handleDownloadImage = useCallback(async () => {
     if (tableRef.current === null) return;
-    
     setIsGenerating(true);
 
     try {
-      // 1. Get the current size of the table on screen
       const node = tableRef.current;
       const originalWidth = node.offsetWidth;
       const originalHeight = node.offsetHeight;
-
-      // 2. Define how much padding you want (50px on all sides = 100px total extra)
       const padding = 50;
       const totalPadding = padding * 2;
 
@@ -92,20 +120,12 @@ const ScheduleComponent = ({ rawScheduleData, studentName }) => {
         cacheBust: true,
         backgroundColor: '#ffffff',
         pixelRatio: 2,
-        
-        // 3. FORCE the canvas to be larger than the original element
         width: originalWidth + totalPadding,
         height: originalHeight + totalPadding,
-
         style: {
-           // 4. Add the padding to the internal content to center it in that new space
            padding: `${padding}px`,
-           
-           // Ensure the element knows it can grow to fill the new canvas
            width: `${originalWidth + totalPadding}px`,
            height: `${originalHeight + totalPadding}px`,
-           
-           // Reset transforms just in case
            transform: 'none',
            boxSizing: 'border-box'
         }
@@ -154,7 +174,7 @@ const ScheduleComponent = ({ rawScheduleData, studentName }) => {
         
         <div ref={tableRef} className="w-fit bg-white">
 
-            {/* The Actual Card (Ref removed from here) */}
+            {/* The Actual Card */}
             <div className="min-w-[1000px] bg-white border-4 border-neu-black rounded-xl p-6 relative">
                 
                 {/* Header Info */}
@@ -203,8 +223,8 @@ const ScheduleComponent = ({ rawScheduleData, studentName }) => {
                                                     <div className="mt-auto flex justify-between items-center border-t border-black/10 pt-1 text-[11px]">
                                                         <span className="font-bold truncate max-w-[60%]">{course.location}</span>
                                                         <div className="flex items-center gap-1">
-                                                        <span className="font-black text-[10px] uppercase tracking-wider opacity-70">
-                                                                {course.type === 'Lecture' ? 'LEC' : 'TUT'}
+                                                            <span className="font-black text-[10px] uppercase tracking-wider opacity-70">
+                                                                    {course.type === 'Lecture' ? 'LEC' : 'TUT'}
                                                             </span>
                                                             <span className="bg-black/10 px-1.5 rounded font-bold text-[11px]">
                                                                 {course.group}
