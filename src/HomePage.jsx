@@ -45,7 +45,7 @@ const HomePage = () => {
             <Star size={32} />
           </div>
           <div>
-            <h3 className="text-xl font-bold">PDF Export</h3>
+            <h3 className="text-xl font-bold">PNG Export</h3>
             <p className="text-sm font-medium opacity-80">Save and share easily</p>
           </div>
         </div>
