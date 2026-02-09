@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Calendar, Instagram} from 'lucide-react';
+import { Menu, X, Home, Calendar,Calculator ,Instagram} from 'lucide-react';
 
 const Layout = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,6 +11,7 @@ const Layout = ({ children }) => {
   const navItems = [
     { name: 'Home', path: '/', icon: <Home size={20} /> },
     { name: 'My Schedule', path: '/schedule', icon: <Calendar size={20} /> },
+    { name: 'GPA Calculator', path: '/GPA-Calc', icon: <Calculator size={20} /> },
   ];
 
   return (

@@ -74,12 +74,15 @@ const ScheduleComponent = ({ rawScheduleData, studentName }) => {
 
       let match;
       while ((match = courseRegex.exec(dayContent)) !== null) {
+
         let finalLocation = match[4]; // The ID in brackets
         
         // Handle the specific logic where location might be in the parens or the text
         if (finalLocation === '0' && match[5]) {
             finalLocation = match[5]; // Use parens content (e.g. CCEC Lab2)
         }
+
+       
         
         const rawType = match[3].trim();
         const strictType = rawType.split(' ').pop(); // e.g., "Lecture"
